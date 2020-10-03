@@ -18,7 +18,7 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
     id: string,
     private body: ConstOrContextFn<Context, string>,
   ) {
-    super(id, null);
+    super(id);
     this.enter(async ctx => {
       await this.setupSceneMessage(ctx);
       await this.setupHandlers(ctx);
@@ -29,7 +29,7 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
     this.actions.add(text, options.do, options);
   }
 
-  navigate(text: ConstOrContextFn<Context, string>, sceneId: string, options: ActionOptions<Context>): void {
+  navigate(text: ConstOrContextFn<Context, string>, sceneId: string, options?: ActionOptions<Context>): void {
     this.actions.add(text, Stage.enter(sceneId, null), options);
   }
 
@@ -39,7 +39,7 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
     await ctx.reply(body, keyboard);
   }
 
-  private async renderBody(ctx: Context): Promise<Body> {
+  async renderBody(ctx: Context): Promise<Body> {
     return this.resolveConstOrContextFn(ctx, this.body);
   }
 
@@ -51,12 +51,12 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
     const rows: ReplyKeyboard = [];
 
     for (const {trigger, options} of this.actions.getAll()) {
-      const isHide = await options.hide?.(ctx);
+      const isHide = options && await options.hide?.(ctx);
       const triggerText = await this.resolveConstOrContextFn(ctx, trigger);
       const button = Markup.button(triggerText, isHide);
 
       const lastRow = rows[rows.length-1];
-      if (options.joinLeft && Array.isArray(lastRow)) {
+      if (options && options.joinLeft && Array.isArray(lastRow)) {
         lastRow.push(button);
         continue;
       }
@@ -69,7 +69,7 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
 
   private async setupHandlers(ctx: Context): Promise<void> {
     for (const {trigger, handler, options} of this.actions.getAll()) {
-      const isHide = await options.hide?.(ctx);
+      const isHide = options && await options.hide?.(ctx);
       if (isHide) return;
 
       const triggerText = await this.resolveConstOrContextFn(ctx, trigger);
@@ -77,7 +77,7 @@ export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> ext
     }
   }
 
-  async resolveConstOrContextFn<T extends string | boolean | number>(ctx: Context, data: ConstOrContextFn<Context, T>): Promise<T> {
+  private async resolveConstOrContextFn<T extends string | boolean | number>(ctx: Context, data: ConstOrContextFn<Context, T>): Promise<T> {
     return typeof data === 'function' ? await data(ctx) : data;
   }
 }

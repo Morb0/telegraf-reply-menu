@@ -3293,7 +3293,7 @@ symbol-tree@^3.2.4:
 
 "telegraf@https://github.com/Morb0/telegraf":
   version "3.38.0"
-  resolved "https://github.com/Morb0/telegraf#b15034ee7385be03dc48a11f20218d3abdd6ca2d"
+  resolved "https://github.com/Morb0/telegraf#109489f60c1e18f37ca3eda8005e571416f77c17"
   dependencies:
     debug "^4.0.1"
     minimist "^1.2.0"

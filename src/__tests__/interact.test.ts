@@ -2,10 +2,10 @@ import { Markup } from 'telegraf';
 import { ReplyMenuScene } from '../reply-menu-scene';
 
 describe('ReplyMenuScene.interact', () => {
-  let menu: ReplyMenuScene<null>;
+  let menu: ReplyMenuScene<any>;
 
   beforeEach(() => {
-    menu = new ReplyMenuScene<null>('id','body');
+    menu = new ReplyMenuScene<any>('id','body');
   });
 
   it('should add button to keyboard', async () => {
