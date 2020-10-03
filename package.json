@@ -18,8 +18,8 @@
     "build": "tsc",
     "clear": "rimraf ./dist",
     "test": "jest",
-    "prepublishOnly" : "npm test",
-    "prepare" : "npm run build",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test",
     "version": "git add -A src",
     "postversion": "git push && git push --tags"
   },

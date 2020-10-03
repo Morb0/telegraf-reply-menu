@@ -1,25 +1,22 @@
-import { BaseScene, Context, Markup } from 'telegraf';
+import { BaseScene, Context as TContext, Markup, Stage } from 'telegraf';
 import { ReplyKeyboardMarkup } from 'typegram';
-import { ActionFn, ActionTrigger, ConstOrContextFn, ContextFn, Body } from './generic-types';
+import { ConstOrContextFn, Body } from './generic-types';
+import { ActionHandler, ActionOptions, Actions } from './actions';
+import { KeyboardButton } from 'typegram/types';
+import SceneContext from 'telegraf/typings/scenes/context';
 
-type ReplyKeyboard = ReplyKeyboardMarkup['keyboard'];
-
-interface ButtonOptions<Context> {
-  readonly hide?: ContextFn<Context, boolean>;
-  readonly joinLeft?: boolean;
+type Hideable<B> = B & { hide: boolean; };
+type ReplyKeyboard = Hideable<KeyboardButton>[][];
+interface InteractionOptions<Context extends TContext> extends ActionOptions<Context> {
+  do: ActionHandler<Context>;
 }
 
-interface InteractionOptions<TContext extends Context> extends ButtonOptions<TContext> {
-  do: ActionFn<TContext>,
-}
-
-export class ReplyMenuScene<TContext extends Context> extends BaseScene<TContext> {
-  private actions: Map<ActionTrigger<TContext>, ActionFn<TContext>> = new Map();
-  private keyboard: Map<ActionTrigger<TContext>, ButtonOptions<TContext>> = new Map();
+export class ReplyMenuScene<Context extends SceneContext.Extended<TContext>> extends BaseScene<Context> {
+  private actions = new Actions<Context>();
 
   constructor(
     id: string,
-    private body: ConstOrContextFn<TContext, string>,
+    private body: ConstOrContextFn<Context, string>,
   ) {
     super(id, null);
     this.enter(async ctx => {
@@ -28,61 +25,59 @@ export class ReplyMenuScene<TContext extends Context> extends BaseScene<TContext
     });
   }
 
-  interact(text: ConstOrContextFn<TContext, string>, options: InteractionOptions<TContext>): void {
-    this.actions.set(text, options.do);
-    this.keyboard.set(text, options);
+  interact(text: ConstOrContextFn<Context, string>, options: InteractionOptions<Context>): void {
+    this.actions.add(text, options.do, options);
   }
 
-  private async setupSceneMessage(ctx: TContext): Promise<void> {
+  navigate(text: ConstOrContextFn<Context, string>, sceneId: string, options: ActionOptions<Context>): void {
+    this.actions.add(text, Stage.enter(sceneId, null), options);
+  }
+
+  private async setupSceneMessage(ctx: Context): Promise<void> {
     const body = await this.renderBody(ctx);
     const keyboard = await this.createMessageKeyboard(ctx);
     await ctx.reply(body, keyboard);
   }
 
-  private async renderBody(ctx: TContext): Promise<Body> {
-    if (typeof this.body === 'function') {
-      return Promise.resolve(this.body(ctx));
-    } else {
-      return this.body;
-    }
+  private async renderBody(ctx: Context): Promise<Body> {
+    return this.resolveConstOrContextFn(ctx, this.body);
   }
 
-  async renderKeyboard(ctx: TContext): Promise<ReplyKeyboard> {
-    return [];
+  async renderKeyboard(ctx: Context): Promise<KeyboardButton[][]> {
+    return (await this.createMessageKeyboard(ctx)).reply_markup.keyboard;
   }
 
-  private async createMessageKeyboard(ctx: TContext): Promise<Markup<ReplyKeyboardMarkup>> {
-    const rows: { text: string; hide: boolean; }[][] = [];
+  private async createMessageKeyboard(ctx: Context): Promise<Markup<ReplyKeyboardMarkup>> {
+    const rows: ReplyKeyboard = [];
 
-    for (const [text, options] of this.keyboard.entries()) {
+    for (const {trigger, options} of this.actions.getAll()) {
+      const isHide = await options.hide?.(ctx);
+      const triggerText = await this.resolveConstOrContextFn(ctx, trigger);
+      const button = Markup.button(triggerText, isHide);
+
       const lastRow = rows[rows.length-1];
-      const trigger = await this.resolveActionText(ctx, text);
-      const button = Markup.button(trigger);
-
       if (options.joinLeft && Array.isArray(lastRow)) {
         lastRow.push(button);
-        return;
+        continue;
       }
 
       rows.push([button]);
     }
 
-    return Markup.keyboard(rows, null).resize();
+    return Markup.keyboard(rows).resize();
   }
 
-  private async setupHandlers(ctx: TContext): Promise<void> {
-    for (const [text, action] of this.actions.entries()) {
-      const trigger = await this.resolveActionText(ctx, text);
-      this.hears(trigger, action);
+  private async setupHandlers(ctx: Context): Promise<void> {
+    for (const {trigger, handler, options} of this.actions.getAll()) {
+      const isHide = await options.hide?.(ctx);
+      if (isHide) return;
+
+      const triggerText = await this.resolveConstOrContextFn(ctx, trigger);
+      this.hears(triggerText, handler);
     }
   }
 
-
-  private async resolveActionText(ctx: TContext, text: ConstOrContextFn<TContext, string>): Promise<string> {
-    if (typeof text === 'function') {
-      return Promise.resolve(text(ctx));
-    } else {
-      return text;
-    }
+  async resolveConstOrContextFn<T extends string | boolean | number>(ctx: Context, data: ConstOrContextFn<Context, T>): Promise<T> {
+    return typeof data === 'function' ? await data(ctx) : data;
   }
 }
